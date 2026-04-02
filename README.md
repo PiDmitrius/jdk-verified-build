@@ -118,23 +118,23 @@ No hardcoded versions in `Dockerfile` or `build.sh`.
 
 ```
 Astra Linux 1.8 (Debian 12) container
-+-------------------------------------------------------+
-|  Temurin     Corretto    Oracle    Liberica    Zulu    |
-|  boot JDK    boot JDK    boot JDK  boot JDK   boot JDK|
-|     |            |           |         |          |    |
-|     v            v           v         v          v    |
-|  +---------------------------------------------------+|
-|  |  Same sources: OpenJDK jdk-21.0.10-ga             ||
-|  |  Same compiler: GCC 12                            ||
-|  |  Same flags: configure + make images              ||
-|  +---------------------------------------------------+|
-|     |            |           |         |          |    |
-|     v            v           v         v          v    |
-|  .deb #1     .deb #2     .deb #3   .deb #4    .deb #5 |
-|     |            |           |         |          |    |
-|     +--------  cmp -s  ------+---------+----------+    |
-|                IDENTICAL                               |
-+-------------------------------------------------------+
++---------------------------------------------------------+
+|  Temurin     Corretto    Oracle    Liberica    Zulu     |
+|  boot JDK    boot JDK    boot JDK  boot JDK   boot JDK  |
+|     |            |           |         |          |     |
+|     v            v           v         v          v     |
+|  +---------------------------------------------------+  |
+|  |  Same sources: OpenJDK jdk-21.0.10-ga             |  |
+|  |  Same compiler: GCC 12                            |  |
+|  |  Same flags: configure + make images              |  |
+|  +---------------------------------------------------+  |
+|     |            |           |         |          |     |
+|     v            v           v         v          v     |
+|  .deb #1     .deb #2     .deb #3   .deb #4    .deb #5   |
+|     |            |           |         |          |     |
+|     +--------  cmp -s  ------+---------+----------+     |
+|                IDENTICAL                                |
++---------------------------------------------------------+
 ```
 
 ### What is a boot JDK
