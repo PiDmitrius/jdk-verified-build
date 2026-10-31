@@ -1,12 +1,11 @@
 #!/bin/bash
 # build.sh -- build, normalize, verify, package as .deb
-set -o pipefail
+set -eo pipefail
 
 source /opt/versions.env
 
 export SOURCE_DATE_EPOCH
 export SDKMAN_DIR=/opt/sdkman
-set +u; source "$SDKMAN_DIR/bin/sdkman-init.sh"; set -u
 
 SRC=/src/jdk
 RESULTS=/results
@@ -22,9 +21,9 @@ normalize_jar() {
     local tmp
     tmp=$(mktemp -d)
     cd "$tmp"
-    unzip -q -o "$jar" 2>/dev/null || { rm -rf "$tmp"; return; }
+    unzip -q -o "$jar"
     [ -f META-INF/MANIFEST.MF ] && \
-        sed -i '/^Created-By:/s/(.*)/(OpenJDK)/' META-INF/MANIFEST.MF
+        sed -i 's/^Created-By:.*/Created-By: OpenJDK/' META-INF/MANIFEST.MF
     find . -exec touch -d @${SOURCE_DATE_EPOCH} {} + 2>/dev/null || true
     rm -f "$jar"
     find . -type f | sort | zip -X -q "$jar" -@
@@ -43,18 +42,18 @@ normalize_jmod() {
     dd if="$jmod" bs=1 skip=4 of=body.zip 2>/dev/null
 
     # normalize jars inside
-    unzip -q -o body.zip "lib/*.jar" 2>/dev/null || true
+    unzip -q -o body.zip "lib/*.jar" 2>/dev/null || [ $? -eq 11 ]  # 11: no matches
     find . -name "*.jar" -path "*/lib/*" | while read -r inner; do
         normalize_jar "$tmp/$inner"
         cd "$tmp"
-        zip -X -q body.zip "$inner" 2>/dev/null || true
+        zip -X -q body.zip "$inner"
     done
 
     # repack zip for stable metadata
     local repack
     repack=$(mktemp -d)
     cd "$repack"
-    unzip -q -o "$tmp/body.zip" 2>/dev/null || true
+    unzip -q -o "$tmp/body.zip"
     find . -exec touch -d @${SOURCE_DATE_EPOCH} {} + 2>/dev/null || true
     find . -type f | sort | zip -X -q "$tmp/repacked.zip" -@
     rm -rf "$repack"
@@ -84,8 +83,8 @@ build_vendor() {
     local image="$build_dir/images/jdk"
 
     echo "-- $vendor_id --"
-    sdk use java "$vendor_id"
-    java -version 2>&1 | head -1
+    export JAVA_HOME="$SDKMAN_DIR/candidates/java/$vendor_id"
+    "$JAVA_HOME/bin/java" -version 2>&1 | sed -n 1p
 
     cd "$SRC"
     rm -rf "$build_dir"
@@ -96,6 +95,8 @@ build_vendor() {
         --with-native-debug-symbols=none \
         --with-vendor-name="$VENDOR_NAME" \
         --with-vendor-url="$VENDOR_URL" \
+        --with-version-pre= \
+        --with-version-opt= \
         --disable-warnings-as-errors \
         2>&1 | tail -3
 
@@ -125,7 +126,7 @@ package_deb() {
     local image="$build_dir/images/jdk"
 
     echo "-- packaging $vendor_id --"
-    sdk use java "$vendor_id"
+    export JAVA_HOME="$SDKMAN_DIR/candidates/java/$vendor_id"
 
     cd "$SRC"
     rm -rf "$build_dir"
@@ -136,11 +137,16 @@ package_deb() {
         --with-native-debug-symbols=none \
         --with-vendor-name="$VENDOR_NAME" \
         --with-vendor-url="$VENDOR_URL" \
+        --with-version-pre= \
+        --with-version-opt= \
         --disable-warnings-as-errors \
         2>&1 | tail -3
 
     make CONF="build-$name" images 2>&1 | tail -3
     normalize_image "$image"
+
+    # the packaged image must match the verified hashes
+    (cd "$image" && find . -type f | sort | xargs sha256sum) | diff -q - "$RESULTS/hashes-$name.txt"
 
     local pkg="$RESULTS/pkg"
     rm -rf "$pkg"
@@ -162,11 +168,9 @@ EOF
 #!/bin/sh
 set -e
 JDK=INSTALL_PREFIX_PLACEHOLDER
-update-alternatives --install /usr/bin/java java $JDK/bin/java PRIORITY_PLACEHOLDER \
-    --slave /usr/bin/javac javac $JDK/bin/javac \
-    --slave /usr/bin/jar jar $JDK/bin/jar \
-    --slave /usr/bin/javadoc javadoc $JDK/bin/javadoc \
-    --slave /usr/bin/jshell jshell $JDK/bin/jshell
+for tool in java javac jar javadoc jshell; do
+    update-alternatives --install /usr/bin/$tool $tool $JDK/bin/$tool PRIORITY_PLACEHOLDER
+done
 POSTINST
     sed -i "s|INSTALL_PREFIX_PLACEHOLDER|${INSTALL_PREFIX}|;s|PRIORITY_PLACEHOLDER|${JDK_MAJOR}00|" \
         "$pkg/DEBIAN/postinst"
@@ -175,7 +179,9 @@ POSTINST
     cat > "$pkg/DEBIAN/prerm" <<'PRERM'
 #!/bin/sh
 set -e
-update-alternatives --remove java INSTALL_PREFIX_PLACEHOLDER/bin/java || true
+for tool in java javac jar javadoc jshell; do
+    update-alternatives --remove $tool INSTALL_PREFIX_PLACEHOLDER/bin/$tool || true
+done
 PRERM
     sed -i "s|INSTALL_PREFIX_PLACEHOLDER|${INSTALL_PREFIX}|" "$pkg/DEBIAN/prerm"
     chmod 755 "$pkg/DEBIAN/prerm"
@@ -226,6 +232,7 @@ if [ "$all_ok" = true ]; then
     package_deb "${VENDORS[0]}"
 else
     echo "RESULT: MISMATCH DETECTED"
+    exit 1
 fi
 
 echo ""

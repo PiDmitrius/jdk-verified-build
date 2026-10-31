@@ -1,10 +1,11 @@
 # OpenJDK Verified Build
 
-Build OpenJDK from upstream sources with backdoor verification via
+Build OpenJDK from upstream sources and check it via
 **Diverse Multi-Compilation**.
 
-All versions and parameters are in [`versions.env`](versions.env).
-To build a different JDK version, edit that single file.
+Each JDK version has its own file in [`versions/`](versions); parameters common
+to all of them are in [`versions.env`](versions.env).
+Select the version with `--build-arg JDK_MAJOR=<major>`, default 25.
 
 ## Problem
 
@@ -22,17 +23,19 @@ the output bytewise.
 
 Five vendors with independent build infrastructures:
 
-| Vendor   | Identifier       | Organization       |
-|----------|------------------|--------------------|
-| Temurin  | `21.0.10-tem`    | Eclipse Adoptium   |
-| Corretto | `21.0.10-amzn`   | Amazon             |
-| Oracle   | `21.0.10-oracle` | Oracle Corporation |
-| Liberica | `21.0.10-librca` | BellSoft           |
-| Zulu     | `21.0.10-zulu`   | Azul Systems       |
+| Vendor   | Identifier           | Organization       |
+|----------|----------------------|--------------------|
+| Temurin  | `25.0.5.0+8-tem`     | Eclipse Adoptium   |
+| Corretto | `25.0.5.0+9-amzn`    | Amazon             |
+| Oracle   | `25.0.0.0-oracle`    | Oracle Corporation |
+| Liberica | `25.0.5.0+11-librca` | BellSoft           |
+| Zulu     | `25.0.5.0+8-zulu`    | Azul Systems       |
 
-If all 5 produce **bytewise identical** output, none of them contains a
-trojan compiler backdoor. The probability of the same backdoor in 5
-independent vendors is effectively zero.
+If all 5 produce **bytewise identical** output, the choice of boot JDK did not
+change the result. A boot JDK that altered the compiled output would have to be
+altered the same way in every vendor. This does not prove the absence of a
+backdoor shared by all vendors, or of one in the sources, the compiler or the
+base image, which are common to all builds.
 
 ## Result
 
@@ -44,24 +47,20 @@ independent vendors is effectively zero.
   librca = tem
   zulu = tem
 
--- .deb bytewise --
-  amzn .deb IDENTICAL
-  oracle .deb IDENTICAL
-  librca .deb IDENTICAL
-  zulu .deb IDENTICAL
 
 RESULT: ALL 5 VENDORS IDENTICAL
 ```
 
-All 323 files bytewise identical: native binaries, bytecode, .jar archives,
-.jmod modules, and the .deb package itself.
+All 310 files of the JDK image are bytewise identical: native binaries, CDS
+archives, the modules image, .jar archives and .jmod modules. The .deb is built
+by one more compilation, and its image is checked against the same hashes.
 
 ## Usage
 
 ### Build the Docker image
 
 ```bash
-docker build -t jdk-verified .
+docker build --build-arg JDK_MAJOR=25 -t jdk-verified:25 .
 ```
 
 Image size: ~7 GB (Astra base + GCC + 5 boot JDKs + OpenJDK sources).
@@ -70,20 +69,16 @@ Image size: ~7 GB (Astra base + GCC + 5 boot JDKs + OpenJDK sources).
 
 ```bash
 mkdir results
-docker run --rm -v $(pwd)/results:/results jdk-verified
+docker run --rm -v $(pwd)/results:/results jdk-verified:25
 ```
 
-Time: ~30 minutes on a 4-core machine (5 sequential builds + normalization).
+Time: ~30 minutes on a 16-core machine (6 sequential builds + normalization).
 
 ### Output
 
 ```
 results/
-  openjdk-21-jdk_21.0.10-1_amd64_tem.deb     # .deb per vendor
-  openjdk-21-jdk_21.0.10-1_amd64_amzn.deb    # (all bytewise identical)
-  openjdk-21-jdk_21.0.10-1_amd64_oracle.deb
-  openjdk-21-jdk_21.0.10-1_amd64_librca.deb
-  openjdk-21-jdk_21.0.10-1_amd64_zulu.deb
+  openjdk-25-jdk_25.0.5.0.3-1_amd64.deb        # verified package
   hashes-*.txt                                 # SHA256 of all files
   native-*.txt                                 # SHA256 of native binaries
 ```
@@ -91,48 +86,49 @@ results/
 ### Install on Astra Linux
 
 ```bash
-sudo dpkg -i results/openjdk-21-jdk_21.0.10-1_amd64_tem.deb
+sudo dpkg -i results/openjdk-25-jdk_25.0.5.0.3-1_amd64.deb
 java -version
 ```
 
-Installs JDK to `/usr/lib/jvm/java-21-openjdk-amd64/` and registers
+Installs JDK to `/usr/lib/jvm/java-25-openjdk-amd64/` and registers
 `java`, `javac`, `jar`, `javadoc`, `jshell` via `update-alternatives`.
 
 ## Configuration
 
-All parameters in [`versions.env`](versions.env):
+Version parameters in `versions/<major>.env`:
 
 ```bash
-# To build a different version, edit versions.env:
-JDK_MAJOR=17
-JDK_TAG="jdk-17.0.13-ga"
-JDK_REPO="https://github.com/openjdk/jdk17u"
-BOOT_JDK_VERSION="17.0.13"
+# versions/25.env
+JDK_TAG="jdk-25.0.5.0.3-ga"
+JDK_REPO="https://github.com/openjdk/jdk25u"
+VENDORS=( "25.0.5.0+8-tem" ... )
+SOURCE_DATE="2026-10-24"
 ```
 
-No hardcoded versions in `Dockerfile` or `build.sh`.
+No hardcoded JDK versions in `Dockerfile` or `build.sh`. The base image is pinned
+by digest in `Dockerfile`.
 
 ## How it works
 
 ### Architecture
 
 ```
-Astra Linux 1.8 (Debian 12) container
+Astra Linux 1.8.6 (Debian 12) container
 +---------------------------------------------------------+
 |  Temurin     Corretto    Oracle    Liberica    Zulu     |
 |  boot JDK    boot JDK    boot JDK  boot JDK   boot JDK  |
 |     |            |           |         |          |     |
 |     v            v           v         v          v     |
 |  +---------------------------------------------------+  |
-|  |  Same sources: OpenJDK jdk-21.0.10-ga             |  |
+|  |  Same sources: OpenJDK jdk-25.0.5.0.3-ga          |  |
 |  |  Same compiler: GCC 12                            |  |
 |  |  Same flags: configure + make images              |  |
 |  +---------------------------------------------------+  |
 |     |            |           |         |          |     |
 |     v            v           v         v          v     |
-|  .deb #1     .deb #2     .deb #3   .deb #4    .deb #5   |
+|  hash #1     hash #2     hash #3   hash #4    hash #5   |
 |     |            |           |         |          |     |
-|     +--------  cmp -s  ------+---------+----------+     |
+|     +--------  compare  ----+---------+----------+      |
 |                IDENTICAL                                |
 +---------------------------------------------------------+
 ```
@@ -154,11 +150,11 @@ The boot JDK leaves one trace: the `Created-By` line in
 `META-INF/MANIFEST.MF` inside .jar files:
 
 ```
-Created-By: 21.0.10 (Eclipse Adoptium)   <- Temurin
-Created-By: 21.0.10 (Amazon.com Inc.)    <- Corretto
+Created-By: 25.0.5 (Eclipse Adoptium)   <- Temurin
+Created-By: 25.0.5 (Amazon.com Inc.)    <- Corretto
 ```
 
-The build script normalizes this to `Created-By: 21.0.10 (OpenJDK)` in all
+The build script normalizes this to `Created-By: OpenJDK` in all
 .jar and .jmod files. After normalization, output is bytewise identical.
 
 ### The .jmod format
@@ -184,15 +180,19 @@ For bytewise reproducibility:
 
 | Component  | Source | Version |
 |------------|--------|---------|
-| OpenJDK    | [github.com/openjdk/jdk21u](https://github.com/openjdk/jdk21u) | `jdk-21.0.10-ga` |
-| Base image | `registry.astralinux.ru/library/astra/ubi18` | 1.8.5 |
-| Boot JDKs  | [SDKMAN](https://sdkman.io/) | 5 vendors x 21.0.10 |
+| OpenJDK    | [github.com/openjdk/jdk25u](https://github.com/openjdk/jdk25u) | `jdk-25.0.5.0.3-ga` |
+| Base image | `registry.astralinux.ru/library/astra/ubi18` | 1.8.6 |
+| Boot JDKs  | [SDKMAN](https://sdkman.io/) | 5 vendors, latest 25.x of each |
 
 ## Limitations
 
 - **amd64 only**. For arm64, use arm64 boot JDKs.
 - Astra base image requires access to `registry.astralinux.ru`.
 - The .deb is packaged directly (not via dpkg-buildpackage).
+- A previously installed `openjdk-21-jdk` from this project registers `javac`,
+  `jar`, `javadoc` and `jshell` as slave alternatives and must be removed first.
+- `versions/21.env` lists identifiers SDKMAN no longer publishes; update them
+  before building JDK 21.
 - Upstream sources without Debian/Astra patches. For production, consider
   applying patches from [salsa.debian.org/openjdk-team/openjdk](https://salsa.debian.org/openjdk-team/openjdk).
 

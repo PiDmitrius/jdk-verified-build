@@ -3,13 +3,16 @@
 # Builds OpenJDK from upstream sources inside Astra Linux,
 # using N independent boot JDKs to verify absence of backdoors.
 #
-# All versions and parameters are in versions.env
+# Common parameters are in versions.env, per-version ones in versions/
 #
 # Usage:
-#   docker build -t jdk-verified .
-#   docker run --rm -v $(pwd)/results:/results jdk-verified
+#   docker build --build-arg JDK_MAJOR=25 -t jdk-verified:25 .
+#   docker run --rm -v $(pwd)/results:/results jdk-verified:25
 
-FROM registry.astralinux.ru/library/astra/ubi18:latest
+FROM registry.astralinux.ru/library/astra/ubi18@sha256:b62fb94cf64384778d8c0c0da04a06a30f4ad0abbe18de969caf102e34faf065
+
+ARG JDK_MAJOR=25
+ENV JDK_MAJOR=$JDK_MAJOR
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
@@ -45,6 +48,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 # 2. Configuration
 COPY versions.env /opt/versions.env
+COPY versions/ /opt/versions/
 
 # 3. SDKMAN + boot JDK vendors
 ENV SDKMAN_DIR=/opt/sdkman
