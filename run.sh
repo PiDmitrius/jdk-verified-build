@@ -7,8 +7,7 @@ results=${1:?usage: run.sh <results-dir>}
 [ ! -e "$results" ] || [ -z "$(ls -A "$results")" ] || { echo "results dir not empty: $results" >&2; exit 1; }
 mkdir -p "$results"
 
-verify_builder
-docker load --input "$INPUTS/$BUILDER_ARCHIVE"
+load_builder
 
 # xz comes from the builder image: a kit needs nothing on the host but tar and Docker
 if [ -f "$INPUTS/deps.tar.xz" ]; then

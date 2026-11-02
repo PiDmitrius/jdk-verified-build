@@ -5,7 +5,7 @@ set -euo pipefail
 source "$(dirname "$0")/common.sh"
 output=${1:?usage: kit.sh <output.tar>}
 
-verify_builder
+load_builder
 verify_sources
 mkdir -p "$ROOT/dist" "$(dirname "$output")"
 

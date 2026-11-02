@@ -10,18 +10,21 @@ is_verified() {  # <file> <sha256>
     [ -f "$1" ] && echo "$2  $1" | sha256sum -c --status -
 }
 
-verify_builder() {
-    is_verified "$INPUTS/$BUILDER_ARCHIVE" "$(awk -v n="$BUILDER_ARCHIVE" '$1 == n {print $2}' "$LOCK")" ||
-        { echo "input not localized: $BUILDER_ARCHIVE, run deps.sh" >&2; exit 1; }
-}
-
 verify_sources() {
     while read -r name _ sha _; do
-        [ "$name" = "$BUILDER_ARCHIVE" ] && continue
         is_verified "$INPUTS/$name.tar" "$sha" || { echo "input not localized: $name, run deps.sh" >&2; exit 1; }
     done < "$LOCK"
 }
 
 source_tars() {
-    awk -v n="$BUILDER_ARCHIVE" '$1 != n {print $1 ".tar"}' "$LOCK"
+    awk '{print $1 ".tar"}' "$LOCK"
+}
+
+# The image archive is not bit-for-bit reproducible, its identity is the package list
+load_builder() {
+    [ -f "$INPUTS/$BUILDER_ARCHIVE" ] || { echo "builder not localized, run deps.sh" >&2; exit 1; }
+    docker load --input "$INPUTS/$BUILDER_ARCHIVE"
+    docker run --rm --network none --entrypoint dpkg-query "$BUILDER_IMAGE" -W -f '${binary:Package}=${Version}\n' |
+        LC_ALL=C sort | diff "$ROOT/versions/$JDK_MAJOR.packages" - ||
+        { echo "builder packages differ from versions/$JDK_MAJOR.packages" >&2; exit 1; }
 }

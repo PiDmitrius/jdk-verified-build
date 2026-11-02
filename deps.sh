@@ -1,9 +1,9 @@
 #!/bin/bash
-# deps.sh -- localize every input listed in versions/<major>.lock into $INPUTS.
-# Lock line: <name> <sha256 of published .tar.gz> <sha256 of unpacked .tar> <url>;
-# the builder archive is kept packed, and url "-" builds it from Dockerfile.
+# deps.sh -- online stage: localize everything run.sh needs into $INPUTS.
+# Lock line: <name> <sha256 of published .tar.gz> <sha256 of unpacked .tar> <url>.
 # A file already present with the right SHA-256 is kept; a missing one is downloaded,
 # verified and unpacked. A "-" in a lock line is pinned to what was obtained.
+# The builder image is built from Dockerfile unless $INPUTS already has it.
 set -euo pipefail
 source "$(dirname "$0")/common.sh"
 mkdir -p "$INPUTS"
@@ -20,21 +20,6 @@ settle() {  # <file> <lock sha256> <lock name>
 }
 
 while read -r name gz tar url; do
-    if [ "$name" = "$BUILDER_ARCHIVE" ]; then
-        file="$INPUTS/$name"
-        if [ "$gz" != - ] && is_verified "$file" "$gz"; then echo "local: $name"; continue; fi
-        if [ "$url" != - ]; then
-            echo "fetch: $name"
-            curl --fail --location --retry 3 --output "$file.part" "$url"
-        else
-            echo "build: $name"
-            docker build --provenance=false --build-arg "JDK_MAJOR=$JDK_MAJOR" -t "$BUILDER_IMAGE" "$ROOT"
-            docker save "$BUILDER_IMAGE" | gzip -n > "$file.part"
-        fi
-        settle "$file.part" "$gz" "$name"
-        mv "$file.part" "$file"
-        continue
-    fi
     file="$INPUTS/$name.tar"
     if [ "$tar" != - ] && is_verified "$file" "$tar"; then echo "local: $name"; continue; fi
     echo "fetch: $name"
@@ -45,4 +30,13 @@ while read -r name gz tar url; do
     settle "$file.part" "$tar" "$name"
     mv "$file.part" "$file"
 done < "$LOCK"
+
+if [ -f "$INPUTS/$BUILDER_ARCHIVE" ]; then
+    echo "local: $BUILDER_ARCHIVE"
+else
+    echo "build: $BUILDER_ARCHIVE"
+    docker build --no-cache --provenance=false --build-arg "JDK_MAJOR=$JDK_MAJOR" -t "$BUILDER_IMAGE" "$ROOT"
+    docker save "$BUILDER_IMAGE" | gzip -n > "$INPUTS/$BUILDER_ARCHIVE.part"
+    mv "$INPUTS/$BUILDER_ARCHIVE.part" "$INPUTS/$BUILDER_ARCHIVE"
+fi
 echo "all inputs local: $INPUTS"

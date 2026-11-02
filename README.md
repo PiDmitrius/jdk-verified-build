@@ -57,15 +57,19 @@ by one more compilation, and its image is checked against the same hashes.
 
 ## Usage
 
-The build has two stages. `deps.sh` localizes every input listed in
-`versions/<major>.lock`: a file already in `inputs/` with the right SHA-256 is
-kept, a missing one is downloaded, verified and unpacked. `run.sh` verifies the inputs and
-builds in a container with `--network none`.
+There are two ways to build, both verified against `expected/<major>`.
+
+**Online**, from a checkout. `deps.sh` localizes the inputs listed in
+`versions/<major>.lock` and the builder image into `inputs/`: what is already
+there with the right identity is kept, the rest is downloaded and verified, and
+the image is built from `Dockerfile`. `run.sh` then builds without network.
 
 ```bash
-./deps.sh                # needs network only for missing inputs
-./verify.sh results      # offline build, compared with expected/<major>
+./deps.sh
+./verify.sh results
 ```
+
+**Offline**, from the kit attached to the release, see below.
 
 Select the version with `JDK_MAJOR=<major>`, default 25.
 Time: ~25 minutes on a 16-core machine (6 sequential builds + normalization).
@@ -85,17 +89,16 @@ cd jdk-verified-25
 
 `versions/<major>.lock` holds two hashes per input: of the `.tar.gz` as published
 and of the unpacked `.tar` used by the build. To check the kit against the
-vendors, with network:
+vendors, with network, after `./verify.sh` has unpacked the inputs:
 
 ```bash
 mkdir vendor && cp inputs/docker-builder.tar.gz vendor/
 INPUTS=vendor ./deps.sh
 ```
 
-The builder image is an input published with the release. `Dockerfile` and
-`versions/<major>.packages` describe how it was made: to rebuild it, set its URL
-in the lock to `-` and its SHA-256 to `-`. This gives the same package versions,
-but not the same archive bytes.
+The builder image is not reproducible as an archive, so it is identified by its
+package list: `run.sh` compares the image with `versions/<major>.packages`, in
+both modes. The kit itself is identified by its SHA-256 in the release.
 
 ### Output
 
