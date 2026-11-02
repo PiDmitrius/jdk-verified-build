@@ -16,7 +16,7 @@ if [ -f "$INPUTS/deps.tar.xz" ]; then
 fi
 verify_sources
 
-container=$(docker create --network none -e "JDK_MAJOR=$JDK_MAJOR" "$BUILDER_IMAGE")
+container=$(docker create --network none -e "JDK_MAJOR=$JDK_MAJOR" -e "ONE_VENDOR=${ONE_VENDOR:-}" "$BUILDER_IMAGE")
 trap 'docker rm -f "$container" >/dev/null' EXIT
 
 for f in $(source_tars); do docker cp -q "$INPUTS/$f" "$container:/inputs/$f"; done

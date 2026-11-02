@@ -7,6 +7,12 @@ source /opt/versions.env
 export SOURCE_DATE_EPOCH
 BOOT=/opt/boot
 
+# ONE_VENDOR=<suffix> builds with one boot JDK; expected/<major> then stands for the comparison
+if [ -n "${ONE_VENDOR:-}" ]; then
+    for v in "${VENDORS[@]}"; do [ "${v##*-}" = "$ONE_VENDOR" ] && VENDORS=("$v") && break; done
+    [ "${#VENDORS[@]}" -eq 1 ] || { echo "unknown vendor: $ONE_VENDOR" >&2; exit 1; }
+fi
+
 SRC=/src/jdk
 RESULTS=/results
 mkdir -p "$RESULTS"

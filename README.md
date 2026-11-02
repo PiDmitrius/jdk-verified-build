@@ -71,6 +71,10 @@ the image is built from `Dockerfile`. `run.sh` then builds without network.
 
 **Offline**, from the kit attached to the release, see below.
 
+`./verify.sh` compares all five boot JDKs. `ONE_VENDOR=tem ./verify.sh results`
+builds with one boot JDK: the comparison between vendors is already fixed in
+`expected/<major>`, so a match there gives the same result in a fraction of the time.
+
 Select the version with `JDK_MAJOR=<major>`, default 25.
 Time: ~25 minutes on a 16-core machine (6 sequential builds + normalization).
 
