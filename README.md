@@ -5,7 +5,7 @@ Build OpenJDK from upstream sources and check it via
 
 Each JDK version has its own file in [`versions/`](versions); parameters common
 to all of them are in [`versions.env`](versions.env).
-Select the version with `--build-arg JDK_MAJOR=<major>`, default 25.
+Select the version with `JDK_MAJOR=<major>`, default 25.
 
 ## Problem
 
@@ -57,22 +57,45 @@ by one more compilation, and its image is checked against the same hashes.
 
 ## Usage
 
-### Build the Docker image
+The build has two stages. `deps.sh` localizes every input listed in
+`versions/<major>.lock`: a file already in `inputs/` with the right SHA-256 is
+kept, a missing one is downloaded, verified and unpacked. `run.sh` verifies the inputs and
+builds in a container with `--network none`.
 
 ```bash
-docker build --build-arg JDK_MAJOR=25 -t jdk-verified:25 .
+./deps.sh                # needs network only for missing inputs
+./verify.sh results      # offline build, compared with expected/<major>
 ```
 
-Image size: ~7 GB (Astra base + GCC + 5 boot JDKs + OpenJDK sources).
+Select the version with `JDK_MAJOR=<major>`, default 25.
+Time: ~25 minutes on a 16-core machine (6 sequential builds + normalization).
 
-### Run verification
+### Offline kit
+
+The kit is attached to the release. `./kit.sh dist/jdk-verified-25-kit.tar` packs
+the builder image, the sources and the boot JDKs with one dictionary, the recipe
+and the expected hashes into one archive of ~600 MB. Reproducing needs an amd64 machine with `tar`, Docker and no
+network; unpacking needs 1 GiB of memory and ~3 GB of disk.
 
 ```bash
-mkdir results
-docker run --rm -v $(pwd)/results:/results jdk-verified:25
+tar xf jdk-verified-25-kit.tar
+cd jdk-verified-25
+./verify.sh results
 ```
 
-Time: ~30 minutes on a 16-core machine (6 sequential builds + normalization).
+`versions/<major>.lock` holds two hashes per input: of the `.tar.gz` as published
+and of the unpacked `.tar` used by the build. To check the kit against the
+vendors, with network:
+
+```bash
+mkdir vendor && cp inputs/docker-builder.tar.gz vendor/
+INPUTS=vendor ./deps.sh
+```
+
+The builder image is an input published with the release. `Dockerfile` and
+`versions/<major>.packages` describe how it was made: to rebuild it, set its URL
+in the lock to `-` and its SHA-256 to `-`. This gives the same package versions,
+but not the same archive bytes.
 
 ### Output
 
@@ -100,13 +123,12 @@ Version parameters in `versions/<major>.env`:
 ```bash
 # versions/25.env
 JDK_TAG="jdk-25.0.5.0.3-ga"
-JDK_REPO="https://github.com/openjdk/jdk25u"
 VENDORS=( "25.0.5.0+8-tem" ... )
 SOURCE_DATE="2026-10-24"
 ```
 
-No hardcoded JDK versions in `Dockerfile` or `build.sh`. The base image is pinned
-by digest in `Dockerfile`.
+Download locations and SHA-256 are in `versions/<major>.lock`, package versions in
+`versions/<major>.packages`. The base image is pinned by digest in `Dockerfile`.
 
 ## How it works
 
@@ -172,7 +194,7 @@ prepended. Standard `zip` cannot update them directly. The script:
 For bytewise reproducibility:
 
 - `--with-native-debug-symbols=none` -- no debug info (contains paths)
-- `SOURCE_DATE_EPOCH=0` -- fixed timestamp for `touch`, `zip -X`
+- `SOURCE_DATE_EPOCH` from `SOURCE_DATE` -- fixed timestamp for `touch`, `zip -X`
 - `find | sort | zip -X` -- deterministic file order in archives
 - `dpkg-deb --root-owner-group -Zxz` -- fixed owner and compression
 
@@ -182,17 +204,17 @@ For bytewise reproducibility:
 |------------|--------|---------|
 | OpenJDK    | [github.com/openjdk/jdk25u](https://github.com/openjdk/jdk25u) | `jdk-25.0.5.0.3-ga` |
 | Base image | `registry.astralinux.ru/library/astra/ubi18` | 1.8.6 |
-| Boot JDKs  | [SDKMAN](https://sdkman.io/) | 5 vendors, latest 25.x of each |
+| Boot JDKs  | Vendor download sites, see `versions/25.lock` | 5 vendors |
 
 ## Limitations
 
 - **amd64 only**. For arm64, use arm64 boot JDKs.
-- Astra base image requires access to `registry.astralinux.ru`.
+- Rebuilding the builder image requires access to `registry.astralinux.ru` and the
+  Astra package repository; the offline build does not.
 - The .deb is packaged directly (not via dpkg-buildpackage).
 - A previously installed `openjdk-21-jdk` from this project registers `javac`,
   `jar`, `javadoc` and `jshell` as slave alternatives and must be removed first.
-- `versions/21.env` lists identifiers SDKMAN no longer publishes; update them
-  before building JDK 21.
+- JDK 21 has no `versions/21.lock` yet; add it before building JDK 21.
 - Upstream sources without Debian/Astra patches. For production, consider
   applying patches from [salsa.debian.org/openjdk-team/openjdk](https://salsa.debian.org/openjdk-team/openjdk).
 

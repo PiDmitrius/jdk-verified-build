@@ -5,11 +5,21 @@ set -eo pipefail
 source /opt/versions.env
 
 export SOURCE_DATE_EPOCH
-export SDKMAN_DIR=/opt/sdkman
+BOOT=/opt/boot
 
 SRC=/src/jdk
 RESULTS=/results
 mkdir -p "$RESULTS"
+
+# -- Unpack inputs; everything below runs without network --
+
+mkdir -p "$SRC"
+tar -xf /inputs/src-jdk.tar -C "$SRC" --strip-components=1
+for v in "${VENDORS[@]}"; do
+    name="${v##*-}"
+    mkdir -p "$BOOT/$name"
+    tar -xf "/inputs/tool-jdk-$name.tar" -C "$BOOT/$name" --strip-components=1
+done
 
 echo "OpenJDK ${JDK_MAJOR} Verified Build | ${#VENDORS[@]} vendors | ${JDK_TAG}"
 echo ""
@@ -83,7 +93,7 @@ build_vendor() {
     local image="$build_dir/images/jdk"
 
     echo "-- $vendor_id --"
-    export JAVA_HOME="$SDKMAN_DIR/candidates/java/$vendor_id"
+    export JAVA_HOME="$BOOT/$name"
     "$JAVA_HOME/bin/java" -version 2>&1 | sed -n 1p
 
     cd "$SRC"
@@ -126,7 +136,7 @@ package_deb() {
     local image="$build_dir/images/jdk"
 
     echo "-- packaging $vendor_id --"
-    export JAVA_HOME="$SDKMAN_DIR/candidates/java/$vendor_id"
+    export JAVA_HOME="$BOOT/$name"
 
     cd "$SRC"
     rm -rf "$build_dir"
