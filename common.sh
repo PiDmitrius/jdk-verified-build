@@ -1,8 +1,8 @@
 # common.sh -- shared by deps.sh, run.sh and kit.sh
 ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-JDK_MAJOR=${JDK_MAJOR:-25}
+JDK_MAJOR=${JDK_MAJOR:-$(cd "$ROOT/versions" && ls *.lock | sed "s/\.lock$//" | sort -n | tail -1)}
 LOCK="$ROOT/versions/$JDK_MAJOR.lock"
-INPUTS=${INPUTS:-$ROOT/inputs}
+INPUTS=${INPUTS:-$ROOT/inputs/$JDK_MAJOR}
 BUILDER_ARCHIVE=docker-builder.tar.gz
 BUILDER_IMAGE="jdk-verified-builder:$JDK_MAJOR"
 

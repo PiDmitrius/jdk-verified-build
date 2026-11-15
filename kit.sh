@@ -14,7 +14,7 @@ tar -C "$INPUTS" --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=a+r,u+w \
 
 cp "$INPUTS/$BUILDER_ARCHIVE" "$ROOT/dist/$BUILDER_ARCHIVE"
 tar -C "$ROOT" --sort=name --mtime=@0 --owner=0 --group=0 --numeric-owner --mode=a+rX,u+w \
-    --transform "s,^dist/,inputs/,;s,^,jdk-verified-$JDK_MAJOR/," -cf "$output" \
+    --transform "s,^dist/,inputs/$JDK_MAJOR/,;s,^,jdk-verified-$JDK_MAJOR/," -cf "$output" \
     README.md LICENSE Dockerfile .dockerignore common.sh deps.sh run.sh verify.sh kit.sh build.sh \
     versions.env "versions/$JDK_MAJOR.env" "versions/$JDK_MAJOR.lock" "versions/$JDK_MAJOR.packages" \
     "expected/$JDK_MAJOR" "dist/$BUILDER_ARCHIVE" dist/deps.tar.xz

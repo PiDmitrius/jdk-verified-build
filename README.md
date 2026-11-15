@@ -5,7 +5,7 @@ Build OpenJDK from upstream sources and check it via
 
 Each JDK version has its own file in [`versions/`](versions); parameters common
 to all of them are in [`versions.env`](versions.env).
-Select the version with `JDK_MAJOR=<major>`, default 25.
+Select the version with `JDK_MAJOR=<major>`; the default is the newest `versions/<major>.lock`.
 
 ## Problem
 
@@ -51,7 +51,7 @@ base image, which are common to all builds.
 RESULT: ALL 5 VENDORS IDENTICAL
 ```
 
-All 310 files of the JDK image are bytewise identical: native binaries, CDS
+All files of the JDK image are bytewise identical: native binaries, CDS
 archives, the modules image, .jar archives and .jmod modules. The .deb is built
 by one more compilation, and its image is checked against the same hashes.
 
@@ -60,13 +60,13 @@ by one more compilation, and its image is checked against the same hashes.
 There are two ways to build, both verified against `expected/<major>`.
 
 **Online**, from a checkout. `deps.sh` localizes the inputs listed in
-`versions/<major>.lock` and the builder image into `inputs/`: what is already
+`versions/<major>.lock` and the builder image into `inputs/<major>/`: what is already
 there with the right identity is kept, the rest is downloaded and verified, and
 the image is built from `Dockerfile`. `run.sh` then builds without network.
 
 ```bash
-./deps.sh
-./verify.sh results
+JDK_MAJOR=21 ./deps.sh
+JDK_MAJOR=21 ./verify.sh results
 ```
 
 **Offline**, from the kit attached to the release, see below.
@@ -75,15 +75,12 @@ the image is built from `Dockerfile`. `run.sh` then builds without network.
 builds with one boot JDK: the comparison between vendors is already fixed in
 `expected/<major>`, so a match there gives the same result in a fraction of the time.
 
-Select the version with `JDK_MAJOR=<major>`, default 25.
-Time: ~25 minutes on a 16-core machine (6 sequential builds + normalization).
-
 ### Offline kit
 
 The kit is attached to the release. `./kit.sh dist/jdk-verified-25-kit.tar` packs
 the builder image, the sources and the boot JDKs with one dictionary, the recipe
-and the expected hashes into one archive of ~600 MB. Reproducing needs an amd64 machine with `tar`, Docker and no
-network; unpacking needs 1 GiB of memory and ~3 GB of disk.
+and the expected hashes into one archive. Reproducing needs an amd64 machine
+with `tar`, Docker and no network; unpacking needs 1 GiB of memory and ~3 GB of disk.
 
 ```bash
 tar xf jdk-verified-25-kit.tar
@@ -96,7 +93,7 @@ and of the unpacked `.tar` used by the build. To check the kit against the
 vendors, with network, after `./verify.sh` has unpacked the inputs:
 
 ```bash
-mkdir vendor && cp inputs/docker-builder.tar.gz vendor/
+mkdir vendor && cp inputs/<major>/docker-builder.tar.gz vendor/
 INPUTS=vendor ./deps.sh
 ```
 
@@ -209,9 +206,10 @@ For bytewise reproducibility:
 
 | Component  | Source | Version |
 |------------|--------|---------|
-| OpenJDK    | [github.com/openjdk/jdk25u](https://github.com/openjdk/jdk25u) | `jdk-25.0.5.0.3-ga` |
+| OpenJDK 25 | [github.com/openjdk/jdk25u](https://github.com/openjdk/jdk25u) | `jdk-25.0.5.0.3-ga` |
+| OpenJDK 21 | [github.com/openjdk/jdk21u](https://github.com/openjdk/jdk21u) | `jdk-21.0.13.0.3-ga` |
 | Base image | `registry.astralinux.ru/library/astra/ubi18` | 1.8.6 |
-| Boot JDKs  | Vendor download sites, see `versions/25.lock` | 5 vendors |
+| Boot JDKs  | Vendor download sites, see `versions/<major>.lock` | 5 vendors |
 
 ## Limitations
 
@@ -219,9 +217,8 @@ For bytewise reproducibility:
 - Rebuilding the builder image requires access to `registry.astralinux.ru` and the
   Astra package repository; the offline build does not.
 - The .deb is packaged directly (not via dpkg-buildpackage).
-- A previously installed `openjdk-21-jdk` from this project registers `javac`,
-  `jar`, `javadoc` and `jshell` as slave alternatives and must be removed first.
-- JDK 21 has no `versions/21.lock` yet; add it before building JDK 21.
+- `openjdk-21-jdk` 21.0.10 from this project registers `javac`, `jar`, `javadoc` and
+  `jshell` as slave alternatives and must be removed before installing a newer package.
 - Upstream sources without Debian/Astra patches. For production, consider
   applying patches from [salsa.debian.org/openjdk-team/openjdk](https://salsa.debian.org/openjdk-team/openjdk).
 

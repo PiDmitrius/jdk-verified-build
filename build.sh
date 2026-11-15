@@ -95,7 +95,7 @@ normalize_image() {
 build_vendor() {
     local vendor_id="$1"
     local name="${vendor_id##*-}"
-    local build_dir="$SRC/build/build-$name"
+    local build_dir="$SRC/build/build-jdk"
     local image="$build_dir/images/jdk"
 
     echo "-- $vendor_id --"
@@ -107,7 +107,7 @@ build_vendor() {
 
     bash configure \
         --with-boot-jdk="$JAVA_HOME" \
-        --with-conf-name="build-$name" \
+        --with-conf-name="build-jdk" \
         --with-native-debug-symbols=none \
         --with-vendor-name="$VENDOR_NAME" \
         --with-vendor-url="$VENDOR_URL" \
@@ -116,7 +116,7 @@ build_vendor() {
         --disable-warnings-as-errors \
         2>&1 | tail -3
 
-    make CONF="build-$name" images 2>&1 | tail -3
+    make CONF="build-jdk" images 2>&1 | tail -3
     echo "  build ok"
 
     normalize_image "$image"
@@ -138,7 +138,7 @@ build_vendor() {
 package_deb() {
     local vendor_id="$1"
     local name="${vendor_id##*-}"
-    local build_dir="$SRC/build/build-$name"
+    local build_dir="$SRC/build/build-jdk"
     local image="$build_dir/images/jdk"
 
     echo "-- packaging $vendor_id --"
@@ -149,7 +149,7 @@ package_deb() {
 
     bash configure \
         --with-boot-jdk="$JAVA_HOME" \
-        --with-conf-name="build-$name" \
+        --with-conf-name="build-jdk" \
         --with-native-debug-symbols=none \
         --with-vendor-name="$VENDOR_NAME" \
         --with-vendor-url="$VENDOR_URL" \
@@ -158,7 +158,7 @@ package_deb() {
         --disable-warnings-as-errors \
         2>&1 | tail -3
 
-    make CONF="build-$name" images 2>&1 | tail -3
+    make CONF="build-jdk" images 2>&1 | tail -3
     normalize_image "$image"
 
     # the packaged image must match the verified hashes
@@ -235,7 +235,7 @@ for v in "${VENDORS[@]:1}"; do
     else
         echo "  $name != $ref  ***"
         diff "hashes-$ref.txt" "hashes-$name.txt" | head -20 \
-            > "diff-${ref}-vs-${name}.txt"
+            > "diff-${ref}-vs-${name}.txt" || true
         all_ok=false
     fi
 done
