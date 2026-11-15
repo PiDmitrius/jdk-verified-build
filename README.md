@@ -217,8 +217,6 @@ For bytewise reproducibility:
 - Rebuilding the builder image requires access to `registry.astralinux.ru` and the
   Astra package repository; the offline build does not.
 - The .deb is packaged directly (not via dpkg-buildpackage).
-- `openjdk-21-jdk` 21.0.10 from this project registers `javac`, `jar`, `javadoc` and
-  `jshell` as slave alternatives and must be removed before installing a newer package.
 - Upstream sources without Debian/Astra patches. For production, consider
   applying patches from [salsa.debian.org/openjdk-team/openjdk](https://salsa.debian.org/openjdk-team/openjdk).
 
