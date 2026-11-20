@@ -23,13 +23,13 @@ the output bytewise.
 
 Five vendors with independent build infrastructures:
 
-| Vendor   | Identifier           | Organization       |
-|----------|----------------------|--------------------|
-| Temurin  | `25.0.5.0+8-tem`     | Eclipse Adoptium   |
-| Corretto | `25.0.5.0+9-amzn`    | Amazon             |
-| Oracle   | `25.0.0.0-oracle`    | Oracle Corporation |
-| Liberica | `25.0.5.0+11-librca` | BellSoft           |
-| Zulu     | `25.0.5.0+8-zulu`    | Azul Systems       |
+| Vendor   | Identifier | Organization       |
+|----------|------------|--------------------|
+| Temurin  | `tem`      | Eclipse Adoptium   |
+| Corretto | `amzn`     | Amazon             |
+| Oracle   | `oracle`   | Oracle Corporation |
+| Liberica | `librca`   | BellSoft           |
+| Zulu     | `zulu`     | Azul Systems       |
 
 If all 5 produce **bytewise identical** output, the choice of boot JDK did not
 change the result. A boot JDK that altered the compiled output would have to be
@@ -59,17 +59,20 @@ by one more compilation, and its image is checked against the same hashes.
 
 There are two ways to build, both verified against `expected/<major>`.
 
-**Online**, from a checkout. `deps.sh` localizes the inputs listed in
-`versions/<major>.lock` and the builder image into `inputs/<major>/`: what is already
-there with the right identity is kept, the rest is downloaded and verified, and
-the image is built from `Dockerfile`. `run.sh` then builds without network.
+**Online**, from a checkout. `deps.sh` checks the source and boot JDK archives
+against `versions/<major>.lock` and downloads missing or changed inputs into
+`inputs/<major>/`. It builds the builder image from `Dockerfile` if the image
+archive is absent. `run.sh` then builds without network.
 
 ```bash
 JDK_MAJOR=21 ./deps.sh
 JDK_MAJOR=21 ./verify.sh results
 ```
 
-**Offline**, from the kit attached to the release, see below.
+If the builder package list changes, use the same fresh `INPUTS` directory
+for `deps.sh` and `verify.sh` or `kit.sh`.
+
+**Offline**, from a kit prepared locally.
 
 `./verify.sh` compares all five boot JDKs. `ONE_VENDOR=tem ./verify.sh results`
 builds with one boot JDK: the comparison between vendors is already fixed in
@@ -77,14 +80,22 @@ builds with one boot JDK: the comparison between vendors is already fixed in
 
 ### Offline kit
 
-The kit is attached to the release. `./kit.sh dist/jdk-verified-25-kit.tar` packs
-the builder image, the sources and the boot JDKs with one dictionary, the recipe
-and the expected hashes into one archive. Reproducing needs an amd64 machine
-with `tar`, Docker and no network; unpacking needs 1 GiB of memory and ~3 GB of disk.
+`kit.sh` bundles the builder image, sources, boot JDKs, build recipe and
+expected hashes. Prepare a kit from a checkout with network access.
 
 ```bash
-tar xf jdk-verified-25-kit.tar
-cd jdk-verified-25
+major=21
+JDK_MAJOR=$major ./deps.sh
+JDK_MAJOR=$major ./kit.sh "dist/jdk-verified-$major-kit.tar"
+```
+
+Reproduce on an amd64 machine with `tar` and Docker. Allow disk space for the
+unpacked inputs and Docker build data.
+
+```bash
+major=21
+tar xf "jdk-verified-$major-kit.tar"
+cd "jdk-verified-$major"
 ./verify.sh results
 ```
 
@@ -93,31 +104,39 @@ and of the unpacked `.tar` used by the build. To check the kit against the
 vendors, with network, after `./verify.sh` has unpacked the inputs:
 
 ```bash
-mkdir vendor && cp inputs/<major>/docker-builder.tar.gz vendor/
+major=21
+mkdir vendor && cp "inputs/$major/docker-builder.tar.gz" vendor/
 INPUTS=vendor ./deps.sh
 ```
 
-The builder image is not reproducible as an archive, so it is identified by its
-package list: `run.sh` compares the image with `versions/<major>.packages`, in
-both modes. The kit itself is identified by its SHA-256 in the release.
+`run.sh` checks the builder image against `versions/<major>.packages` in both
+modes.
 
 ### Output
 
 ```
 results/
-  openjdk-25-jdk_25.0.5.0.3-1_amd64.deb        # verified package
-  hashes-*.txt                                 # SHA256 of all files
-  native-*.txt                                 # SHA256 of native binaries
+  openjdk-<major>-jdk_<version>-1_amd64.deb  # verified package
+  hashes-*.txt                             # SHA256 of all files
+  native-*.txt                             # SHA256 of native binaries
 ```
 
 ### Install on Astra Linux
 
+The current [GitHub releases](https://github.com/PiDmitrius/jdk-verified-build/releases)
+for JDK 21 and 25 each provide an amd64 `.deb` and `SHA256SUMS`. Download both
+files into the same directory. Run the commands there, substituting the major
+version and package version from the asset name.
+
 ```bash
-sudo dpkg -i results/openjdk-25-jdk_25.0.5.0.3-1_amd64.deb
-java -version
+sha256sum -c SHA256SUMS &&
+  sudo dpkg -i "./openjdk-<major>-jdk_<version>-1_amd64.deb" &&
+  "/usr/lib/jvm/java-<major>-openjdk-amd64/bin/java" -version
 ```
 
-Installs JDK to `/usr/lib/jvm/java-25-openjdk-amd64/` and registers
+For a local build, install the verified package from `results/`.
+
+Installs JDK to `/usr/lib/jvm/java-<major>-openjdk-amd64/` and registers
 `java`, `javac`, `jar`, `javadoc`, `jshell` via `update-alternatives`.
 
 ## Configuration
@@ -125,10 +144,9 @@ Installs JDK to `/usr/lib/jvm/java-25-openjdk-amd64/` and registers
 Version parameters in `versions/<major>.env`:
 
 ```bash
-# versions/25.env
-JDK_TAG="jdk-25.0.5.0.3-ga"
-VENDORS=( "25.0.5.0+8-tem" ... )
-SOURCE_DATE="2026-10-24"
+JDK_TAG="jdk-<version>-ga"
+VENDORS=( "<boot-version>-tem" ... )
+SOURCE_DATE="<YYYY-MM-DD>"
 ```
 
 Download locations and SHA-256 are in `versions/<major>.lock`, package versions in
@@ -139,14 +157,14 @@ Download locations and SHA-256 are in `versions/<major>.lock`, package versions 
 ### Architecture
 
 ```
-Astra Linux 1.8.6 (Debian 12) container
+Astra Linux container
 +---------------------------------------------------------+
 |  Temurin     Corretto    Oracle    Liberica    Zulu     |
 |  boot JDK    boot JDK    boot JDK  boot JDK   boot JDK  |
 |     |            |           |         |          |     |
 |     v            v           v         v          v     |
 |  +---------------------------------------------------+  |
-|  |  Same sources: OpenJDK jdk-25.0.5.0.3-ga          |  |
+|  |  Same sources: OpenJDK jdk-<version>-ga           |  |
 |  |  Same compiler: GCC 12                            |  |
 |  |  Same flags: configure + make images              |  |
 |  +---------------------------------------------------+  |
@@ -176,8 +194,8 @@ The boot JDK leaves one trace: the `Created-By` line in
 `META-INF/MANIFEST.MF` inside .jar files:
 
 ```
-Created-By: 25.0.5 (Eclipse Adoptium)   <- Temurin
-Created-By: 25.0.5 (Amazon.com Inc.)    <- Corretto
+Created-By: <version> (Eclipse Adoptium)
+Created-By: <version> (Amazon.com Inc.)
 ```
 
 The build script normalizes this to `Created-By: OpenJDK` in all
@@ -204,12 +222,9 @@ For bytewise reproducibility:
 
 ## Sources
 
-| Component  | Source | Version |
-|------------|--------|---------|
-| OpenJDK 25 | [github.com/openjdk/jdk25u](https://github.com/openjdk/jdk25u) | `jdk-25.0.5.0.3-ga` |
-| OpenJDK 21 | [github.com/openjdk/jdk21u](https://github.com/openjdk/jdk21u) | `jdk-21.0.13.0.3-ga` |
-| Base image | `registry.astralinux.ru/library/astra/ubi18` | 1.8.6 |
-| Boot JDKs  | Vendor download sites, see `versions/<major>.lock` | 5 vendors |
+Source tags and boot JDK versions are in [`versions/`](versions). The source and
+boot JDK archives are pinned by URL and SHA-256 in `versions/<major>.lock`.
+The Astra Linux base image digest is pinned in [`Dockerfile`](Dockerfile).
 
 ## Limitations
 

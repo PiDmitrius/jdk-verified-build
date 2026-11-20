@@ -4,7 +4,7 @@
 # Package versions are pinned in versions/<major>.packages; sources and boot JDKs
 # are inputs of run.sh, see versions/<major>.lock.
 
-FROM registry.astralinux.ru/library/astra/ubi18@sha256:b62fb94cf64384778d8c0c0da04a06a30f4ad0abbe18de969caf102e34faf065
+FROM registry.astralinux.ru/library/astra/ubi18@sha256:786169c9a41bfd3de0f5096f7c9e392abc0514284f780f15f6d2192658fa917a
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV LANG=C.UTF-8
